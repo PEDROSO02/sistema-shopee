@@ -1,0 +1,144 @@
+<!-- liberacao.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Liberação de Pedidos</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:Inter, Arial, sans-serif;background:#f6f7fb;padding:18px}
+    .wrap{max-width:900px;margin:18px auto;background:#fff;padding:18px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+    h1{margin:0 0 12px}
+    .row{display:flex;gap:12px;align-items:center}
+    input, button, textarea{padding:8px;border:1px solid #ddd;border-radius:6px}
+    input{flex:1}
+    .prod-list{margin-top:10px}
+    .prod-item{display:flex;justify-content:space-between;background:#f8f9ff;padding:8px;border-radius:6px;margin-bottom:8px}
+    .controls{margin-top:12px;display:flex;gap:8px}
+    .btn{padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
+    .btn-primary{background:#2d7bf6;color:white}
+    .btn-danger{background:#e04b4b;color:white}
+    .small{font-size:13px;color:#555}
+    .logout{float:right}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <button class="logout btn" onclick="logout()">Sair</button>
+    <h1>Liberação de Pedidos</h1>
+
+    <label class="small">ID do pedido</label>
+    <input id="id_pedido" placeholder="Ex: 251115S3NYANMM" />
+
+    <div style="margin-top:10px">
+      <label class="small">Produto</label>
+      <div class="row">
+        <input id="produto_nome" placeholder="Nome do produto (ex: 10x15)" />
+        <input id="produto_qtd" style="width:110px" placeholder="Qtd (ex: 306)" />
+        <button class="btn btn-primary" id="addBtn">Adicionar</button>
+      </div>
+      <div class="prod-list" id="produtosList"></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-primary" id="cadastrarBtn">Cadastrar Pedido</button>
+      <button class="btn btn-danger" onclick="clearForm()">Limpar</button>
+    </div>
+
+    <div id="statusMsg" style="margin-top:12px;color:#b00"></div>
+  </div>
+
+  <script>
+    // Validação de token: se não houver, volta ao login
+    const token = localStorage.getItem('token');
+    if (!token) location.href = 'login.html';
+
+    const produtos = [];
+    const produtosListEl = document.getElementById('produtosList');
+    const statusEl = document.getElementById('statusMsg');
+
+    function renderProdutos() {
+      produtosListEl.innerHTML = produtos.map((p, i) => `
+        <div class="prod-item">
+          <div>
+            <strong>${p.produto}</strong><div class="small">Qtd: ${p.quantidade}</div>
+          </div>
+          <div>
+            <button onclick="removeProduto(${i})" class="btn" style="background:#ddd">Remover</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addProduto() {
+      const nome = document.getElementById('produto_nome').value.trim();
+      const qtdRaw = document.getElementById('produto_qtd').value.trim();
+      if (!nome) { statusEl.textContent = 'Digite o nome do produto'; return; }
+      const qtd = qtdRaw ? parseInt(qtdRaw,10) : 1;
+      if (isNaN(qtd) || qtd <= 0) { statusEl.textContent = 'Quantidade inválida'; return; }
+      produtos.push({ produto: nome, quantidade: qtd });
+      document.getElementById('produto_nome').value = '';
+      document.getElementById('produto_qtd').value = '';
+      statusEl.textContent = '';
+      renderProdutos();
+    }
+
+    function removeProduto(i) {
+      produtos.splice(i,1);
+      renderProdutos();
+    }
+
+    document.getElementById('addBtn').addEventListener('click', (e) => { e.preventDefault(); addProduto(); });
+
+    async function cadastrarPedido() {
+      const id = document.getElementById('id_pedido').value.trim();
+      if (!id) { statusEl.textContent = 'ID do pedido é obrigatório'; return; }
+      if (produtos.length === 0) { statusEl.textContent = 'Adicione ao menos 1 produto'; return; }
+      try {
+        document.getElementById('cadastrarBtn').disabled = true;
+        document.getElementById('cadastrarBtn').textContent = 'Cadastrando...';
+        const res = await fetch('/pedidos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'authorization': token },
+          body: JSON.stringify({ id_pedido: id, produtos })
+        });
+        const txt = await res.text();
+        if (!res.ok) {
+          statusEl.textContent = 'Erro: ' + txt;
+          console.error('Erro ao cadastrar:', txt);
+          document.getElementById('cadastrarBtn').disabled = false;
+          document.getElementById('cadastrarBtn').textContent = 'Cadastrar Pedido';
+          return;
+        }
+        statusEl.style.color = 'green';
+        statusEl.textContent = txt;
+        clearForm();
+      } catch (err) {
+        console.error(err);
+        statusEl.style.color = '#b00';
+        statusEl.textContent = 'Erro de conexão';
+      } finally {
+        document.getElementById('cadastrarBtn').disabled = false;
+        document.getElementById('cadastrarBtn').textContent = 'Cadastrar Pedido';
+      }
+    }
+
+    document.getElementById('cadastrarBtn').addEventListener('click', (e) => { e.preventDefault(); cadastrarPedido(); });
+
+    function clearForm() {
+      document.getElementById('id_pedido').value = '';
+      produtos.length = 0;
+      renderProdutos();
+      statusEl.textContent = '';
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      location.href = 'login.html';
+    }
+
+    // pro tip: render vazio inicialmente
+    renderProdutos();
+  </script>
+</body>
+</html>

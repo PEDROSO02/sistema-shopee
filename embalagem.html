@@ -1,0 +1,128 @@
+<!-- embalagem.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Embalagem - Conferência</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:Inter, Arial, sans-serif;background:#f6f7fb;padding:18px}
+    .wrap{max-width:1000px;margin:18px auto;background:#fff;padding:18px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+    h1{margin:0 0 12px}
+    .card{border:2px solid #eee;padding:12px;border-radius:8px;margin-bottom:12px;background:#fbfcff;transition:0.3s}
+    .faltante{border-color:#f39c12 !important;background:#fff7e6 !important}
+    .prod-list{margin-left:12px}
+    .actions{margin-top:10px}
+    .btn{padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
+    .btn-success{background:#2ecc71;color:#fff}
+    .btn-warn{background:#f39c12;color:#fff}
+    .btn-logout{float:right}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <button class="btn btn-logout" onclick="logout()">Sair</button>
+    <h1>Pedidos - A Embalar</h1>
+    <div id="lista">Carregando...</div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    if (!token) location.href = 'login.html';
+
+    async function loadPedidos() {
+      try {
+        const res = await fetch('/pedidos', { headers: { 'authorization': token }});
+        if (!res.ok) {
+          const txt = await res.text();
+          alert('Erro: ' + txt);
+          if (res.status === 401 || res.status === 403) location.href = 'login.html';
+          return;
+        }
+
+        const pedidos = await res.json();
+
+        // 🔥 Mostrar somente pedidos NÃO embalados
+        const pendentes = pedidos.filter(p => p.status !== "embalado");
+
+        const container = document.getElementById('lista');
+        if (!pendentes.length) {
+          container.innerHTML = '<p>Nenhum pedido a embalar</p>';
+          return;
+        }
+
+        container.innerHTML = pendentes.map(p => {
+          const produtosHtml = (p.produtos || [])
+            .map(pr => `<li>${pr.produto} ${pr.quantidade ? '('+pr.quantidade+')' : ''}</li>`)
+            .join('');
+
+          // 🔥 adicionar classe "faltante" se estiver faltante
+          const classe = p.status === "faltante" ? "card faltante" : "card";
+
+          return `
+            <div class="${classe}" id="pedido-${p.id_pedido}">
+              <strong>ID:</strong> ${p.id_pedido}
+              <ul class="prod-list">${produtosHtml}</ul>
+              <div class="actions">
+                <button class="btn btn-success" onclick="tentarEmbalado('${p.id_pedido}', '${p.status}')">Marcar como Embalado</button>
+                <button class="btn btn-warn" onclick="atualizar('${p.id_pedido}','faltante')">Marcar como Faltante</button>
+              </div>
+            </div>`;
+        }).join('');
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('lista').innerHTML = '<p>Erro ao carregar pedidos</p>';
+      }
+    }
+
+    // 🔥 verificação de senha antes de embalar faltantes
+    async function tentarEmbalado(id, statusAtual) {
+      if (statusAtual === "faltante") {
+        const senha = prompt("⚠ Pedido marcado como FALTANTE.\nDigite a senha para embalar:");
+        if (senha !== "021006") {
+          alert("Senha incorreta. Ação cancelada.");
+          return;
+        }
+      }
+      atualizar(id, "embalado");
+    }
+
+    async function atualizar(id, status) {
+      try {
+        const res = await fetch(`/pedidos/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type':'application/json', 'authorization': token },
+          body: JSON.stringify({ status })
+        });
+
+        const txt = await res.text();
+        if (!res.ok) {
+          alert('Erro: ' + txt);
+          return;
+        }
+
+        // 🔥 se embalado → remover
+        if (status === "embalado") {
+          const el = document.getElementById('pedido-' + id);
+          if (el) el.remove();
+        }
+
+        alert(txt);
+
+      } catch (err) {
+        console.error(err);
+        alert('Erro de conexão');
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      location.href = 'login.html';
+    }
+
+    loadPedidos();
+    setInterval(loadPedidos, 8000);
+  </script>
+</body>
+</html>
